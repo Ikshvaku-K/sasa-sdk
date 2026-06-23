@@ -2,6 +2,7 @@
 Per-project in-memory metrics + Spark output reader.
 """
 import json
+import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
@@ -10,6 +11,20 @@ from typing import Any
 
 import config
 SPARK_OUT = config.SPARK_OUTPUT_DIR
+log = logging.getLogger("sasa")
+
+
+def _bump(counter: dict, key: str):
+    """
+    Increment counter[key], but cap the number of DISTINCT keys so that
+    attacker-controlled values (paths/labels/event names) can't grow the dict
+    without bound. (Fixes audit M-2.) New keys past the cap are folded into a
+    single "__other__" bucket.
+    """
+    if key in counter or len(counter) < config.MAX_DISTINCT_KEYS:
+        counter[key] += 1
+    else:
+        counter["__other__"] += 1
 
 
 @dataclass
@@ -37,7 +52,7 @@ class ProjectMetrics:
         vid      = props.get("video_id") or event.get("video_id", "")
 
         self.total_events += 1
-        self.event_type_counts[ename] += 1
+        _bump(self.event_type_counts, ename)
 
         # bucket timeline
         if now - self._bucket_ts >= 1.0:
@@ -51,12 +66,12 @@ class ProjectMetrics:
 
         # page counts
         if ename == "page_view":
-            self.page_counts[path] += 1
+            _bump(self.page_counts, path[:200])
 
         # click labels
         if ename == "click":
             label = props.get("sf_label") or props.get("text") or props.get("element") or "unknown"
-            self.top_clicks[label[:60]] += 1
+            _bump(self.top_clicks, label[:60])
 
         # video
         if vid and ename.startswith("video_"):
@@ -119,8 +134,8 @@ def _read_spark(subdir: str) -> list[dict]:
                 if line:
                     rows.append(json.loads(line))
             _seen_files.add(key)
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("could not read spark output %s: %s", f, e)
     return rows
 
 

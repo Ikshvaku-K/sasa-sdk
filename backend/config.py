@@ -16,11 +16,24 @@ def _env_int(key: str, default: int) -> int:
         return default
 
 # ── Server ────────────────────────────────────────────────────────────────────
-HOST = _env("HOST", "0.0.0.0")
+# Default to loopback so the service isn't accidentally exposed on every
+# interface during local dev. Set HOST=0.0.0.0 explicitly for containers. (L-2)
+HOST = _env("HOST", "127.0.0.1")
 PORT = _env_int("PORT", 8001)
 
 # ── Security ──────────────────────────────────────────────────────────────────
+# When set to a non-empty value, the management API (/api/*) requires
+# `Authorization: Bearer <ADMIN_SECRET>`. Leave empty ONLY for local dev. (H-1)
 ADMIN_SECRET = _env("ADMIN_SECRET", "")   # empty = admin auth disabled in dev
+
+# ── Request size limits (M-3) ─────────────────────────────────────────────────
+MAX_BODY_BYTES   = _env_int("MAX_BODY_BYTES",   1_048_576)  # 1 MB max request body
+MAX_BATCH_EVENTS = _env_int("MAX_BATCH_EVENTS", 1_000)      # max events per batch
+
+# ── Metric cardinality cap (M-2) ──────────────────────────────────────────────
+# Hard ceiling on the number of distinct keys retained per metric dict, to stop
+# attacker-controlled values (paths/labels/event names) growing memory forever.
+MAX_DISTINCT_KEYS = _env_int("MAX_DISTINCT_KEYS", 5_000)
 
 # ── Demo project ──────────────────────────────────────────────────────────────
 # Loaded from env so the key is never committed to source control.

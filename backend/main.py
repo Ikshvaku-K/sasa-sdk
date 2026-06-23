@@ -20,6 +20,7 @@ GET  /demo                   Demo page showing SDK integration
 
 import asyncio
 import json
+import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -31,9 +32,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import config
+from auth import require_admin
 from metrics_store import full_snapshot, record_event
 from projects import create_project, get_project, list_projects, validate_key
 from rate_limit import check_ingest_limit, check_mgmt_limit, client_ip
+
+log = logging.getLogger("sasa")
 
 BASE     = Path(__file__).parent.parent
 SDK_DIR  = BASE / "sdk"
@@ -53,8 +57,8 @@ class WsManager:
         # Send immediate snapshot so client doesn't wait up to 1 s
         try:
             await ws.send_json(full_snapshot(project_id))
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("ws initial snapshot failed for %s: %s", project_id, e)
 
     def disconnect(self, project_id: str, ws: WebSocket):
         lst = self._sockets.get(project_id, [])
@@ -107,8 +111,8 @@ async def retention_cleanup():
                 if f.stat().st_mtime < cutoff:
                     f.unlink()
                     deleted += 1
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("retention: could not remove %s: %s", f, e)
         if deleted:
             print(f"[retention] deleted {deleted} event files older than {days} days")
 
@@ -118,8 +122,8 @@ async def broadcaster():
         for pid in manager.all_project_ids():
             try:
                 await manager.broadcast(pid, full_snapshot(pid))
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("broadcast failed for %s: %s", pid, e)
         await asyncio.sleep(1)
 
 @asynccontextmanager
@@ -143,6 +147,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── body size limit middleware (M-3) ──────────────────────────────────────────
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    cl = request.headers.get("content-length")
+    if cl:
+        try:
+            if int(cl) > config.MAX_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"error": "payload_too_large",
+                             "message": f"Max body size is {config.MAX_BODY_BYTES} bytes."},
+                )
+        except ValueError:
+            pass
+    return await call_next(request)
+
 # ── rate limit headers middleware ─────────────────────────────────────────────
 @app.middleware("http")
 async def rate_limit_headers(request: Request, call_next):
@@ -159,9 +179,16 @@ async def ingest_batch(payload: dict, request: Request):
     if not events:
         return {"ok": True, "count": 0}
 
-    # Determine api_key from first event for rate limiting
-    api_key = events[0].get("api_key", "") if events else ""
-    await check_ingest_limit(request, api_key, event_count=len(events))
+    # Reject oversized batches before doing any work. (M-3)
+    if len(events) > config.MAX_BATCH_EVENTS:
+        raise HTTPException(
+            status_code=413,
+            detail={"error": "batch_too_large",
+                    "message": f"Max {config.MAX_BATCH_EVENTS} events per batch."},
+        )
+
+    # Rate-limit by client IP (not the forgeable api_key field). (H-2)
+    await check_ingest_limit(request, event_count=len(events))
 
     for event in events:
         key        = event.get("api_key", "")
@@ -178,7 +205,7 @@ async def ingest_batch(payload: dict, request: Request):
 @app.post("/ingest/event")
 async def ingest_event(event: dict, request: Request):
     api_key    = event.get("api_key", "")
-    await check_ingest_limit(request, api_key, event_count=1)
+    await check_ingest_limit(request, event_count=1)
 
     project_id = validate_key(api_key) or event.get("project", "default")
     event["project_id"] = project_id
@@ -190,14 +217,16 @@ async def ingest_event(event: dict, request: Request):
 
 
 # ── project management ────────────────────────────────────────────────────────
+# These expose/issue api_keys, so they require the admin token when ADMIN_SECRET
+# is configured (no-op in local dev). See auth.require_admin. (H-1)
 @app.get("/api/projects")
-def api_list_projects(request: Request, _=Depends(check_mgmt_limit)):
+def api_list_projects(request: Request, _=Depends(check_mgmt_limit), __=Depends(require_admin)):
     return [{"id": p.id, "name": p.name, "api_key": p.api_key, "color": p.color}
             for p in list_projects()]
 
 
 @app.post("/api/projects")
-def api_create_project(body: dict, request: Request, _=Depends(check_mgmt_limit)):
+def api_create_project(body: dict, request: Request, _=Depends(check_mgmt_limit), __=Depends(require_admin)):
     name = body.get("name", "").strip()
     if not name:
         raise HTTPException(400, "name required")
@@ -207,7 +236,7 @@ def api_create_project(body: dict, request: Request, _=Depends(check_mgmt_limit)
 
 
 @app.get("/api/projects/{project_id}")
-def api_get_project(project_id: str, request: Request, _=Depends(check_mgmt_limit)):
+def api_get_project(project_id: str, request: Request, _=Depends(check_mgmt_limit), __=Depends(require_admin)):
     p = get_project(project_id)
     if not p:
         raise HTTPException(404, "project not found")

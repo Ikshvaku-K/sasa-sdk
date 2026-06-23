@@ -12,10 +12,19 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "backend"))
 
 BASE = "http://localhost:8001"
 
-# Each test run uses a unique key so it never shares quota with other tests or
-# the demo project.  The key doesn't need to be registered — the ingest endpoint
-# accepts any non-empty api_key and the rate limiter tracks by key string.
+# Ingest is rate-limited by **client IP** (audit H-2 fix). Each test simulates a
+# distinct client by sending a unique X-Forwarded-For, so tests don't share quota.
 _RLTEST_KEY = f"sf_rl_test_{uuid.uuid4().hex[:8]}"
+
+
+def _ip():
+    """A unique, deterministic-looking client IP for isolating a test."""
+    n = uuid.uuid4().int
+    return f"203.0.{(n >> 8) % 256}.{n % 256}"
+
+
+def _hdr(ip=None):
+    return {"X-Forwarded-For": ip or _ip()}
 
 
 def _event(key=None):
@@ -35,7 +44,7 @@ def _event(key=None):
 
 class TestRateLimitHeaders:
     def test_rate_limit_policy_header_on_ingest(self):
-        r = httpx.post(f"{BASE}/ingest/event", json=_event())
+        r = httpx.post(f"{BASE}/ingest/event", json=_event(), headers=_hdr())
         assert "x-ratelimit-policy" in r.headers
         policy = r.headers["x-ratelimit-policy"]
         assert "ingest=" in policy
@@ -47,38 +56,46 @@ class TestRateLimitHeaders:
 
     def test_429_returns_json_error_body(self):
         """Send 600 events in one batch to blow the 500/s ingest limit."""
-        key = f"sf_rl_blow_{uuid.uuid4().hex[:6]}"
-        events = [_event(key) for _ in range(600)]
-        r = httpx.post(f"{BASE}/ingest/batch", json={"events": events})
+        events = [_event() for _ in range(600)]
+        r = httpx.post(f"{BASE}/ingest/batch", json={"events": events}, headers=_hdr())
         assert r.status_code == 429
         body = r.json()
         assert body["detail"]["error"] == "rate_limit_exceeded"
         assert "retry_after_seconds" in body["detail"]
 
     def test_429_has_retry_after_header(self):
-        key = f"sf_rl_hdr_{uuid.uuid4().hex[:6]}"
-        events = [_event(key) for _ in range(600)]
-        r = httpx.post(f"{BASE}/ingest/batch", json={"events": events})
+        events = [_event() for _ in range(600)]
+        r = httpx.post(f"{BASE}/ingest/batch", json={"events": events}, headers=_hdr())
         assert r.status_code == 429
         assert "retry-after" in r.headers
 
-    def test_different_keys_have_independent_limits(self):
-        """Two different api keys should not share quota."""
-        key_a = f"sf_ind_a_{uuid.uuid4().hex[:4]}"
-        key_b = f"sf_ind_b_{uuid.uuid4().hex[:4]}"
-        r_a = httpx.post(f"{BASE}/ingest/batch", json={"events": [_event(key_a) for _ in range(300)]})
-        r_b = httpx.post(f"{BASE}/ingest/batch", json={"events": [_event(key_b) for _ in range(300)]})
+    def test_different_ips_have_independent_limits(self):
+        """Two different client IPs should not share quota (ingest is IP-keyed)."""
+        r_a = httpx.post(f"{BASE}/ingest/batch",
+                         json={"events": [_event() for _ in range(300)]}, headers=_hdr("198.51.100.10"))
+        r_b = httpx.post(f"{BASE}/ingest/batch",
+                         json={"events": [_event() for _ in range(300)]}, headers=_hdr("198.51.100.20"))
         assert r_a.status_code == 200
         assert r_b.status_code == 200
 
+    def test_same_ip_rotating_key_is_still_limited(self):
+        """
+        Regression for audit H-2: rotating the api_key must NOT grant a fresh
+        budget — the same IP sending >500 events/s is throttled regardless.
+        """
+        ip = _ip()
+        events = [_event(f"rotate_{uuid.uuid4().hex}") for _ in range(600)]
+        r = httpx.post(f"{BASE}/ingest/batch", json={"events": events}, headers=_hdr(ip))
+        assert r.status_code == 429
+
     def test_limit_resets_after_window(self):
         """After 1 s the ingest window resets and requests succeed again."""
-        key = f"sf_rl_reset_{uuid.uuid4().hex[:6]}"
-        events = [_event(key) for _ in range(600)]
-        r1 = httpx.post(f"{BASE}/ingest/batch", json={"events": events})
+        ip = _ip()
+        events = [_event() for _ in range(600)]
+        r1 = httpx.post(f"{BASE}/ingest/batch", json={"events": events}, headers=_hdr(ip))
         assert r1.status_code == 429
         time.sleep(1.1)
-        r2 = httpx.post(f"{BASE}/ingest/event", json=_event(key))
+        r2 = httpx.post(f"{BASE}/ingest/event", json=_event(), headers=_hdr(ip))
         assert r2.status_code == 200
 
 
@@ -88,11 +105,13 @@ class TestRateLimitSlidingWindow:
         Send 400 events, wait for window to slide, then send 200 more — both
         should succeed because the first 400 have aged out of the 1-second window.
         """
-        key = f"sf_sliding_{uuid.uuid4().hex[:6]}"
-        r1 = httpx.post(f"{BASE}/ingest/batch", json={"events": [_event(key) for _ in range(400)]})
+        ip = _ip()
+        r1 = httpx.post(f"{BASE}/ingest/batch",
+                        json={"events": [_event() for _ in range(400)]}, headers=_hdr(ip))
         assert r1.status_code == 200
         time.sleep(1.1)
-        r2 = httpx.post(f"{BASE}/ingest/batch", json={"events": [_event(key) for _ in range(200)]})
+        r2 = httpx.post(f"{BASE}/ingest/batch",
+                        json={"events": [_event() for _ in range(200)]}, headers=_hdr(ip))
         assert r2.status_code == 200
 
 

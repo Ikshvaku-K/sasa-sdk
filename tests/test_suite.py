@@ -247,7 +247,10 @@ class TestEventIngestion:
     def test_high_volume_ingestion(self):
         """Send 200 events in one batch — server must handle without error."""
         events = [self._event("heartbeat") for _ in range(200)]
-        r = httpx.post(f"{BASE}/ingest/batch", json={"events": events}, timeout=30)
+        # Ingest is IP-rate-limited; use a dedicated client IP so this burst is
+        # isolated from other tests' traffic on the shared loopback bucket.
+        r = httpx.post(f"{BASE}/ingest/batch", json={"events": events}, timeout=30,
+                       headers={"X-Forwarded-For": f"192.0.2.{uuid.uuid4().int % 254 + 1}"})
         assert r.status_code == 200
         assert r.json()["count"] == 200
 
@@ -486,15 +489,18 @@ class TestConcurrency:
         self._pid = test_pid
 
     def _send(self, n, results, idx, key, pid):
-        # Each thread uses a unique key so threads don't share rate-limit quota
+        # Ingest is IP-rate-limited; give each thread its own client IP so the
+        # 10 concurrent senders don't share (and exhaust) one bucket.
         thread_key = f"sf_conctest_{idx}_{uuid.uuid4().hex[:4]}"
+        thread_ip  = f"100.64.{idx}.{uuid.uuid4().int % 254 + 1}"
         events = [{
             "event_id": str(uuid.uuid4()), "project": pid, "api_key": thread_key,
             "session_id": str(uuid.uuid4()), "user_id": f"thread_{idx}",
             "event_name": "heartbeat", "path": "/load-test",
             "url": "http://x.com", "title": "T", "timestamp": time.time(),
         } for _ in range(n)]
-        r = httpx.post(f"{BASE}/ingest/batch", json={"events": events}, timeout=30)
+        r = httpx.post(f"{BASE}/ingest/batch", json={"events": events}, timeout=30,
+                       headers={"X-Forwarded-For": thread_ip})
         results[idx] = r.status_code
 
     def test_10_concurrent_senders(self):

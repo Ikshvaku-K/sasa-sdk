@@ -2,12 +2,17 @@
 Sliding-window rate limiter — no Redis required.
 
 Two limiters:
-  ingest_limiter   — per api_key, events per second
+  ingest_limiter   — per client IP, events per second
   mgmt_limiter     — per client IP, requests per minute
+
+Ingest is bucketed by **client IP**, NOT by the client-supplied api_key, because
+the api_key field is attacker-controlled: keying on it lets an attacker rotate
+to a fresh key per request and get an unlimited budget. (Fixes audit H-2.)
 
 Algorithm: sliding-window log (stores timestamps of recent requests in a deque).
 Thread-safe via asyncio (single-threaded event loop); the deques are never
-accessed from multiple threads.
+accessed from multiple threads. Empty buckets are evicted so the key space
+cannot grow without bound. (Fixes audit M-2.)
 """
 import time
 from collections import defaultdict, deque
@@ -40,6 +45,9 @@ class SlidingWindowLimiter:
 
         if len(dq) + cost > self.limit:
             remaining = max(0, self.limit - len(dq))
+            # leave no empty bucket behind if we just emptied it
+            if not dq:
+                self._log.pop(key, None)
             return False, remaining
 
         # record `cost` timestamps as a single group (append cost times)
@@ -47,6 +55,17 @@ class SlidingWindowLimiter:
             dq.append(now)
 
         return True, self.limit - len(dq)
+
+    def evict_idle(self):
+        """Drop buckets that currently hold no in-window timestamps. (M-2)"""
+        now = time.monotonic()
+        cutoff = now - self.window
+        for key in list(self._log.keys()):
+            dq = self._log[key]
+            while dq and dq[0] < cutoff:
+                dq.popleft()
+            if not dq:
+                self._log.pop(key, None)
 
     def reset(self, key: str):
         self._log.pop(key, None)
@@ -73,18 +92,20 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-async def check_ingest_limit(request: Request, api_key: str, event_count: int = 1):
+async def check_ingest_limit(request: Request, event_count: int = 1):
     """
-    Dependency: rate-limit ingest by api_key.
+    Dependency: rate-limit ingest by **client IP** (not the client-supplied
+    api_key, which is forgeable — see module docstring, audit H-2).
     Raises HTTP 429 if over limit. Returns remaining quota.
     """
-    allowed, remaining = ingest_limiter.is_allowed(api_key or "anonymous", cost=event_count)
+    ip = client_ip(request)
+    allowed, remaining = ingest_limiter.is_allowed(ip, cost=event_count)
     if not allowed:
         raise HTTPException(
             status_code=429,
             detail={
                 "error": "rate_limit_exceeded",
-                "message": f"Ingest limit: {RATE_LIMIT_INGEST_PER_SEC} events/s per API key.",
+                "message": f"Ingest limit: {RATE_LIMIT_INGEST_PER_SEC} events/s per IP.",
                 "retry_after_seconds": 1,
             },
             headers={"Retry-After": "1", "X-RateLimit-Remaining": "0"},

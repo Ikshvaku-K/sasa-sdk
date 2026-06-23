@@ -27,11 +27,24 @@ def _seed():
 _seed()
 
 
+_RESERVED_IDS = {"demo"}
+
+
 def create_project(name: str, color: str = "#4f8ef7") -> Project:
-    pid = name.lower().replace(" ", "-")[:32]
+    """
+    Create a project with a collision-free id. (Fixes audit M-1.)
+    The id is derived from the name, but a short random suffix is appended if it
+    would collide with an existing or reserved id — so creating a project named
+    "demo" can never clobber the built-in demo project.
+    """
+    base = name.lower().replace(" ", "-")[:32] or "project"
+    pid  = base
+    while pid in _PROJECTS or pid in _RESERVED_IDS:
+        pid = f"{base[:25]}-{secrets.token_hex(3)}"
+
     key = "sf_" + secrets.token_urlsafe(16)
     p   = Project(id=pid, name=name, api_key=key, color=color)
-    _PROJECTS[pid]      = p
+    _PROJECTS[pid]       = p
     _KEY_TO_PROJECT[key] = pid
     return p
 

@@ -30,10 +30,10 @@ async function loadProjects() {
 function renderProjectList(projects) {
   const el = document.getElementById('project-list');
   el.innerHTML = projects.map(p => `
-    <div class="proj-item ${currentProject?.id === p.id ? 'active':''}" id="proj-${p.id}" onclick="selectProject(${JSON.stringify(p).replace(/"/g,'&quot;')})">
-      <div class="proj-dot" style="background:${p.color}"></div>
-      <div class="proj-name">${p.name}</div>
-      <div class="proj-sessions" id="proj-sessions-${p.id}">—</div>
+    <div class="proj-item ${currentProject?.id === p.id ? 'active':''}" id="proj-${escHtml(p.id)}" onclick="selectProject(${JSON.stringify(p).replace(/"/g,'&quot;')})">
+      <div class="proj-dot" style="background:${safeColor(p.color)}"></div>
+      <div class="proj-name">${escHtml(p.name)}</div>
+      <div class="proj-sessions" id="proj-sessions-${escHtml(p.id)}">—</div>
     </div>`).join('');
 }
 
@@ -126,7 +126,7 @@ function renderTopPages(pages) {
   const max = pages[0]?.views || 1;
   tbody.innerHTML = pages.slice(0,8).map(p => `
     <tr>
-      <td style="font-family:monospace;color:var(--accent)">${p.path}</td>
+      <td style="font-family:monospace;color:var(--accent)">${escHtml(p.path)}</td>
       <td style="text-align:right;font-weight:700">${p.views}</td>
       <td style="width:80px">
         <div class="bar-inline"><div class="bar-inline-fill" style="width:${Math.round(p.views/max*100)}%"></div></div>
@@ -399,4 +399,9 @@ function fmtTimestamp() {
 }
 function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// Only allow hex colours into inline style; fall back to the brand accent so a
+// crafted `color` value can't break out of the style attribute. (H-3 hardening)
+function safeColor(c) {
+  return /^#[0-9a-fA-F]{3,8}$/.test(String(c||'')) ? c : 'var(--accent)';
 }
