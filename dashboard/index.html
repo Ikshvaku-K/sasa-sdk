@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SASA — Analytics Dashboard</title>
+  <link rel="stylesheet" href="/dashboard/static/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ── sidebar ───────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-name">Stream<span>Flow</span></div>
+      <div class="brand-sub">Analytics Platform</div>
+    </div>
+
+    <div class="nav-section">Navigation</div>
+    <div class="nav-item active"><span class="nav-icon">📊</span> Dashboard</div>
+    <div class="nav-item" onclick="openSnippet()"><span class="nav-icon">⚡</span> Install SDK</div>
+    <div class="nav-item" onclick="window.open('/demo','_blank')"><span class="nav-icon">🎬</span> Demo Page</div>
+    <div class="nav-item" onclick="window.open('/docs','_blank')"><span class="nav-icon">📄</span> API Docs</div>
+
+    <div class="nav-section" style="margin-top:8px">Projects</div>
+    <div class="project-list" id="project-list"></div>
+
+    <div class="sidebar-bottom">
+      <button class="btn-new-proj" onclick="openNewProject()">+ New Project</button>
+    </div>
+  </aside>
+
+  <!-- ── main ──────────────────────────────────────────────────────────── -->
+  <div class="main">
+    <!-- topbar -->
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Select a project</div>
+      <div class="live-pill"><div class="live-dot"></div>Live</div>
+      <button class="snippet-btn" onclick="openSnippet()">⚡ Get Snippet</button>
+      <div class="conn-badge">
+        <div class="conn-circle" id="conn-circle"></div>
+        <span id="conn-text">Connecting…</span>
+      </div>
+    </div>
+
+    <!-- content -->
+    <div class="content">
+
+      <!-- stat cards -->
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Active Sessions</div>
+          <div class="stat-value c-green" id="stat-sessions">—</div>
+          <div class="stat-delta">right now</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Page Views</div>
+          <div class="stat-value c-blue" id="stat-pageviews">—</div>
+          <div class="stat-delta">total tracked</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Events</div>
+          <div class="stat-value c-purple" id="stat-events">—</div>
+          <div class="stat-delta">since server start</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Events / sec</div>
+          <div class="stat-value c-amber" id="stat-eps">—</div>
+          <div class="stat-delta">current rate</div>
+        </div>
+      </div>
+
+      <!-- row 1: timeline + donut -->
+      <div class="row2">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Events per second</div>
+            <span class="panel-badge badge-live">live</span>
+          </div>
+          <div class="panel-body">
+            <div class="chart-wrap" style="height:120px">
+              <canvas id="chart-timeline"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Event breakdown</div>
+            <span class="panel-badge badge-live">live</span>
+          </div>
+          <div class="panel-body">
+            <div class="chart-wrap" style="height:120px">
+              <canvas id="chart-donut"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- row 2: top pages + top clicks + video viewers -->
+      <div class="row3">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Top Pages</div>
+            <span class="panel-badge badge-live">live</span>
+          </div>
+          <div class="panel-body" style="padding:0">
+            <table class="data-table">
+              <thead><tr><th>Path</th><th>Views</th><th></th></tr></thead>
+              <tbody id="top-pages-body">
+                <tr><td colspan="3" style="color:var(--muted);text-align:center;padding:16px">Waiting…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Top Clicks</div>
+            <span class="panel-badge badge-live">live</span>
+          </div>
+          <div class="panel-body" style="padding:0">
+            <table class="data-table">
+              <thead><tr><th>Element</th><th>Clicks</th></tr></thead>
+              <tbody id="top-clicks-body">
+                <tr><td colspan="2" style="color:var(--muted);text-align:center;padding:16px">Waiting…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Video Viewers</div>
+            <span class="panel-badge badge-live">live</span>
+          </div>
+          <div class="panel-body" id="video-viewers">
+            <div class="empty"><div class="empty-icon">🎬</div><div class="empty-text">No video events yet</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- row 3: spark windows + event feed -->
+      <div class="row2">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Event counts by window</div>
+            <span class="panel-badge badge-spark">⚡ Spark</span>
+          </div>
+          <div class="panel-body">
+            <div class="chart-wrap" style="height:160px">
+              <canvas id="chart-spark"></canvas>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:8px">
+              1-min tumbling windows from Apache Spark Structured Streaming. Updates every 10 s.
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Live event feed</div>
+            <span class="panel-badge badge-live">live</span>
+          </div>
+          <div class="feed-wrap">
+            <div id="feed-inner"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<!-- modal -->
+<div id="modal-backdrop" class="modal-backdrop hidden">
+  <div class="modal" id="modal-snippet"></div>
+</div>
+
+<script src="/dashboard/static/js/dashboard.js"></script>
+</body>
+</html>

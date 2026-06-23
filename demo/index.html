@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acme SaaS — SASA Demo Site</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#f8fafc;--text:#0f172a;--muted:#64748b;--accent:#6366f1;--border:#e2e8f0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    nav{background:#fff;border-bottom:1px solid var(--border);padding:0 40px;height:60px;display:flex;align-items:center;gap:32px}
+    .logo{font-size:18px;font-weight:800;color:var(--accent)}
+    .nav-link{font-size:14px;color:var(--muted);cursor:pointer;text-decoration:none;transition:color .15s}
+    .nav-link:hover{color:var(--text)}
+    .nav-cta{margin-left:auto;padding:8px 18px;border-radius:8px;background:var(--accent);color:#fff;border:none;font-size:14px;font-weight:600;cursor:pointer}
+
+    .hero{text-align:center;padding:80px 20px 60px;max-width:720px;margin:0 auto}
+    .hero h1{font-size:48px;font-weight:900;line-height:1.1;margin-bottom:16px}
+    .hero h1 span{color:var(--accent)}
+    .hero p{font-size:18px;color:var(--muted);margin-bottom:32px}
+    .hero-buttons{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+    .btn{padding:12px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;border:none;transition:all .15s}
+    .btn-primary{background:var(--accent);color:#fff} .btn-primary:hover{background:#4f46e5}
+    .btn-outline{background:#fff;color:var(--text);border:2px solid var(--border)} .btn-outline:hover{border-color:var(--accent)}
+
+    section{padding:60px 40px;max-width:1100px;margin:0 auto}
+    .section-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:8px}
+    .section-h{font-size:32px;font-weight:800;margin-bottom:12px}
+    .section-p{font-size:16px;color:var(--muted);max-width:560px;margin-bottom:32px}
+
+    .features{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .feat{background:#fff;border:1px solid var(--border);border-radius:12px;padding:24px}
+    .feat-icon{font-size:28px;margin-bottom:12px}
+    .feat-title{font-size:16px;font-weight:700;margin-bottom:6px}
+    .feat-desc{font-size:14px;color:var(--muted);line-height:1.6}
+
+    .pricing{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .plan{background:#fff;border:1px solid var(--border);border-radius:12px;padding:28px;text-align:center}
+    .plan.featured{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+    .plan-name{font-size:14px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+    .plan-price{font-size:40px;font-weight:900;margin-bottom:4px}
+    .plan-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+    .plan-btn{width:100%;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:none}
+    .plan-btn.primary{background:var(--accent);color:#fff}
+    .plan-btn.outline{background:#fff;color:var(--text);border:2px solid var(--border)}
+
+    .video-section{background:#0f172a;padding:60px 40px;text-align:center}
+    .video-section h2{color:#fff;font-size:28px;font-weight:800;margin-bottom:8px}
+    .video-section p{color:#94a3b8;margin-bottom:32px}
+    .video-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;max-width:900px;margin:0 auto}
+    .video-card{background:#1e293b;border-radius:12px;overflow:hidden;text-align:left}
+    .video-card video{width:100%;display:block;height:200px;object-fit:cover}
+    .video-card-body{padding:14px}
+    .video-card-title{color:#e2e8f0;font-weight:700;font-size:15px;margin-bottom:4px}
+    .video-card-sub{color:#94a3b8;font-size:12px}
+
+    .sdk-banner{background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:40px;text-align:center;border-radius:16px;margin:40px auto;max-width:800px}
+    .sdk-banner h2{color:#fff;font-size:24px;font-weight:800;margin-bottom:8px}
+    .sdk-banner p{color:rgba(255,255,255,.8);margin-bottom:20px;font-size:15px}
+    .sdk-banner a{background:#fff;color:var(--accent);padding:10px 22px;border-radius:8px;font-weight:700;text-decoration:none;font-size:14px}
+
+    footer{background:#fff;border-top:1px solid var(--border);padding:20px 40px;text-align:center;color:var(--muted);font-size:13px}
+  </style>
+
+  <!--
+    SASA SDK — 1 script tag, zero config.
+    The API key is fetched at runtime from /api/projects/demo so it is
+    never hardcoded in source control.
+  -->
+  <script>
+    (async () => {
+      try {
+        const res  = await fetch('/api/projects/demo');
+        const proj = await res.json();
+        const s    = document.createElement('script');
+        s.src                         = '/sdk/sasa.js';
+        s.setAttribute('data-project',      proj.id);
+        s.setAttribute('data-api-key',      proj.api_key);
+        s.setAttribute('data-track-videos', 'true');
+        s.setAttribute('data-track-clicks', 'true');
+        s.setAttribute('data-track-scroll', 'true');
+        document.head.appendChild(s);
+      } catch(e) { console.warn('SASA: could not load project config', e); }
+    })();
+  </script>
+</head>
+<body>
+
+<nav>
+  <span class="logo">Acme</span>
+  <a class="nav-link" href="#features" data-sf-label="nav-features">Features</a>
+  <a class="nav-link" href="#pricing"  data-sf-label="nav-pricing">Pricing</a>
+  <a class="nav-link" href="#videos"   data-sf-label="nav-videos">Videos</a>
+  <a class="nav-link" href="/dashboard" target="_blank" data-sf-label="nav-dashboard">📊 Analytics</a>
+  <button class="nav-cta btn btn-primary" data-sf-label="cta-nav-signup">Get Started Free</button>
+</nav>
+
+<!-- hero -->
+<div class="hero">
+  <div class="section-title">Now with SASA analytics</div>
+  <h1>Ship faster with <span>real-time</span> insights</h1>
+  <p>Every click, page view, and video play on this demo page is being tracked by SASA and streaming into your Spark-powered dashboard right now.</p>
+  <div class="hero-buttons">
+    <button class="btn btn-primary" data-sf-label="hero-cta-primary">Start for Free</button>
+    <button class="btn btn-outline" data-sf-label="hero-cta-demo" onclick="scrollTo('#videos')">Watch Demo</button>
+  </div>
+</div>
+
+<!-- features -->
+<section id="features">
+  <div class="section-title">Features</div>
+  <div class="section-h">Everything your team needs</div>
+  <div class="section-p">Built for developers. No complex setup, no sampling, no data silos.</div>
+  <div class="features">
+    <div class="feat">
+      <div class="feat-icon">⚡</div>
+      <div class="feat-title">Real-time streaming</div>
+      <div class="feat-desc">Apache Spark Structured Streaming processes every event in under 10 seconds with tumbling window aggregations.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📦</div>
+      <div class="feat-title">One script tag</div>
+      <div class="feat-desc">Drop in a single &lt;script&gt; tag and get page views, sessions, clicks, scroll depth, video events, and JS errors automatically.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔑</div>
+      <div class="feat-title">Multi-project</div>
+      <div class="feat-desc">Create unlimited projects with isolated API keys. Each project gets its own real-time dashboard and Spark pipeline.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🎬</div>
+      <div class="feat-title">Video analytics</div>
+      <div class="feat-desc">Tracks play, pause, seek, buffer, completion and heartbeats for every &lt;video&gt; element — no extra code needed.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔍</div>
+      <div class="feat-title">SPA support</div>
+      <div class="feat-desc">Wraps pushState and popstate to auto-track navigation in React, Vue, Next.js, and any other single-page framework.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🛡️</div>
+      <div class="feat-title">Self-hosted</div>
+      <div class="feat-desc">Your data never leaves your infrastructure. Run on any server, container, or cloud provider in minutes.</div>
+    </div>
+  </div>
+</section>
+
+<!-- videos -->
+<div class="video-section" id="videos">
+  <h2>Watch our product demos</h2>
+  <p>All video events below are tracked in real time. Open <a href="/dashboard" target="_blank" style="color:#818cf8">the dashboard</a> to see them.</p>
+  <div class="video-grid">
+    <div class="video-card">
+      <video controls preload="metadata" title="Big Buck Bunny"
+        src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4">
+      </video>
+      <div class="video-card-body">
+        <div class="video-card-title">Big Buck Bunny</div>
+        <div class="video-card-sub">Animation · 9:56</div>
+      </div>
+    </div>
+    <div class="video-card">
+      <video controls preload="metadata" title="Elephant Dream"
+        src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4">
+      </video>
+      <div class="video-card-body">
+        <div class="video-card-title">Elephant Dream</div>
+        <div class="video-card-sub">Animation · 10:54</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- pricing -->
+<section id="pricing">
+  <div class="section-title">Pricing</div>
+  <div class="section-h">Simple, transparent pricing</div>
+  <div class="pricing">
+    <div class="plan">
+      <div class="plan-name">Starter</div>
+      <div class="plan-price">$0</div>
+      <div class="plan-sub">Forever free</div>
+      <button class="plan-btn outline" data-sf-label="pricing-starter">Get Started</button>
+    </div>
+    <div class="plan featured">
+      <div class="plan-name" style="color:var(--accent)">Pro</div>
+      <div class="plan-price">$49</div>
+      <div class="plan-sub">per month</div>
+      <button class="plan-btn primary" data-sf-label="pricing-pro">Start Free Trial</button>
+    </div>
+    <div class="plan">
+      <div class="plan-name">Enterprise</div>
+      <div class="plan-price">Custom</div>
+      <div class="plan-sub">Contact us</div>
+      <button class="plan-btn outline" data-sf-label="pricing-enterprise">Talk to Sales</button>
+    </div>
+  </div>
+</section>
+
+<!-- sdk banner -->
+<div style="padding:0 40px">
+  <div class="sdk-banner">
+    <h2>Add SASA to your app in 30 seconds</h2>
+    <p>One script tag. Real-time Spark analytics. No configuration required.</p>
+    <a href="/dashboard" data-sf-label="banner-cta">Open Dashboard →</a>
+  </div>
+</div>
+
+<footer>
+  <p>This page is instrumented with SASA. Every interaction is tracked. <a href="/dashboard" style="color:var(--accent)">View live dashboard →</a></p>
+</footer>
+
+<script>
+  // Simulate some custom events for demo purposes
+  setTimeout(() => {
+    SASA.track('feature_viewed', { feature: 'real-time streaming' });
+  }, 3000);
+  setTimeout(() => {
+    SASA.identify('demo_user_42', { plan: 'trial', company: 'Acme Corp' });
+  }, 5000);
+</script>
+</body>
+</html>
