@@ -173,8 +173,32 @@ async def rate_limit_headers(request: Request, call_next):
     return response
 
 # ── ingest ────────────────────────────────────────────────────────────────────
+async def _parse_json_body(request: Request) -> dict:
+    """
+    Parse the request body as JSON regardless of Content-Type.
+
+    The browser SDK delivers events via navigator.sendBeacon, which always sets
+    Content-Type: text/plain. FastAPI's typed body params only JSON-decode
+    application/json, so a typed param would 422 every beacon and silently drop
+    all events. We therefore read the raw body and json-decode it ourselves.
+    text/plain is also a CORS-safe content type, so beacons work cross-origin
+    without a preflight.
+    """
+    raw = await request.body()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail={"error": "invalid_json"})
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail={"error": "expected_json_object"})
+    return data
+
+
 @app.post("/ingest/batch")
-async def ingest_batch(payload: dict, request: Request):
+async def ingest_batch(request: Request):
+    payload = await _parse_json_body(request)
     events = payload.get("events", [])
     if not events:
         return {"ok": True, "count": 0}
@@ -191,6 +215,8 @@ async def ingest_batch(payload: dict, request: Request):
     await check_ingest_limit(request, event_count=len(events))
 
     for event in events:
+        if not isinstance(event, dict):
+            continue
         key        = event.get("api_key", "")
         project_id = validate_key(key) or event.get("project", "default")
         event["project_id"] = project_id
@@ -203,7 +229,8 @@ async def ingest_batch(payload: dict, request: Request):
 
 
 @app.post("/ingest/event")
-async def ingest_event(event: dict, request: Request):
+async def ingest_event(request: Request):
+    event = await _parse_json_body(request)
     api_key    = event.get("api_key", "")
     await check_ingest_limit(request, event_count=1)
 

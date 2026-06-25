@@ -259,6 +259,24 @@ class TestEventIngestion:
         assert r.status_code == 200
         assert r.json()["count"] == 0
 
+    def test_beacon_text_plain_content_type_accepted(self):
+        """
+        Regression: navigator.sendBeacon (the SDK's primary delivery mechanism)
+        sends bodies as Content-Type: text/plain. The server must still ingest
+        them — otherwise every event from a real browser is silently dropped.
+        """
+        import json as _json
+        e = self._event("page_view")
+        e["path"] = "/beacon-ct"
+        r = httpx.post(
+            f"{BASE}/ingest/batch",
+            content=_json.dumps({"events": [e]}),
+            headers={"Content-Type": "text/plain;charset=UTF-8",
+                     "X-Forwarded-For": f"192.0.2.{uuid.uuid4().int % 254 + 1}"},
+        )
+        assert r.status_code == 200
+        assert r.json()["count"] == 1
+
 
 # ═══════════════════════════════════════════════════════════════
 # SECTION 4 — Metrics API

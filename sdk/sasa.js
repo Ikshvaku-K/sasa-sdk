@@ -32,8 +32,17 @@
     return (scriptTag && scriptTag.getAttribute('data-' + name)) || fallback;
   }
 
+  // Default the ingest endpoint to the ORIGIN THIS SCRIPT WAS LOADED FROM (the
+  // analytics server), so a site that loads sasa.js from the server works with
+  // no data-api-base. Falls back to the page origin if src can't be parsed.
+  // (Previously hard-coded to :8000, which silently dropped events on :8001.)
+  function defaultApiBase() {
+    try { return new URL(scriptTag.src).origin; }
+    catch (e) { return location.origin; }
+  }
+
   var CONFIG = {
-    apiBase:      attr('api-base',    (location.protocol + '//' + location.hostname + ':8000')),
+    apiBase:      attr('api-base',    defaultApiBase()),
     project:      attr('project',     'default'),
     apiKey:       attr('api-key',     ''),
     trackVideos:  attr('track-videos','true') !== 'false',
