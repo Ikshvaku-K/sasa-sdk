@@ -19,16 +19,19 @@ GET  /demo                   Demo page showing SDK integration
 """
 
 import asyncio
+import csv
+import io
 import json
 import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Optional
 
 from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import config
@@ -273,6 +276,92 @@ def api_get_project(project_id: str, request: Request, _=Depends(check_mgmt_limi
 @app.get("/api/metrics/{project_id}")
 def api_metrics(project_id: str, request: Request, _=Depends(check_mgmt_limit)):
     return full_snapshot(project_id)
+
+
+# ── CSV export ────────────────────────────────────────────────────────────────
+# Standard columns emitted for every event; any extra per-event fields are
+# preserved as a JSON string in the trailing "properties" column so the file
+# stays a fixed-width, analytics-friendly CSV (load straight into pandas/Excel).
+EXPORT_COLUMNS = [
+    "event_id", "project_id", "session_id", "user_id", "event_name",
+    "path", "url", "title", "referrer", "screen_w", "screen_h",
+    "user_agent", "timestamp", "ingested_at", "properties",
+]
+
+
+def _iter_project_events(project_id: str):
+    """Yield every stored event for a project (flushed files + in-memory buffer)."""
+    for f in sorted(config.SPARK_EVENTS_DIR.glob("*.json")):
+        try:
+            with open(f) as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+                    if ev.get("project_id") == project_id:
+                        yield ev
+        except FileNotFoundError:
+            continue
+    # include events still buffered in memory (not yet flushed to disk)
+    for ev in list(_event_buffer):
+        if ev.get("project_id") == project_id:
+            yield ev
+
+
+@app.get("/api/export/{project_id}.csv")
+def export_csv(
+    project_id: str,
+    request: Request,
+    event_name: Optional[str] = None,
+    since: Optional[float] = None,
+    until: Optional[float] = None,
+    _=Depends(check_mgmt_limit),
+):
+    """
+    Stream all events for a project as a CSV download for offline analytics.
+
+    Optional query filters:
+      ?event_name=click        only that event type
+      ?since=<unix_ts>         events at/after this timestamp
+      ?until=<unix_ts>         events at/before this timestamp
+    """
+    def rows():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+
+        def flush():
+            data = buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+            return data
+
+        writer.writerow(EXPORT_COLUMNS)
+        yield flush()
+
+        for ev in _iter_project_events(project_id):
+            if event_name and ev.get("event_name") != event_name:
+                continue
+            ts = ev.get("timestamp")
+            if since is not None and (ts is None or ts < since):
+                continue
+            if until is not None and (ts is None or ts > until):
+                continue
+            props = ev.get("properties")
+            row = [ev.get(c, "") for c in EXPORT_COLUMNS[:-1]]
+            row.append(json.dumps(props, ensure_ascii=False) if props else "")
+            writer.writerow(row)
+            yield flush()
+
+    filename = f"sasa_{project_id}_{int(time.time())}.csv"
+    return StreamingResponse(
+        rows(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── WebSocket ─────────────────────────────────────────────────────────────────

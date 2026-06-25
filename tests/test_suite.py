@@ -383,6 +383,53 @@ class TestMetricsAPI:
 
 
 # ═══════════════════════════════════════════════════════════════
+# SECTION 4b — CSV export
+# ═══════════════════════════════════════════════════════════════
+
+class TestCsvExport:
+    @pytest.fixture(autouse=True)
+    def _setup(self, test_key, test_pid):
+        self._key = test_key
+        self._pid = test_pid
+
+    def _ingest(self, etype, path):
+        e = {
+            "event_id": str(uuid.uuid4()), "project": self._pid, "api_key": self._key,
+            "session_id": str(uuid.uuid4()), "user_id": "csv_u", "event_name": etype,
+            "path": path, "url": "http://x.com" + path, "title": "T",
+            "timestamp": time.time(), "properties": {"plan": "pro"},
+        }
+        httpx.post(f"{BASE}/ingest/batch", json={"events": [e]},
+                   headers={"X-Forwarded-For": f"198.18.0.{uuid.uuid4().int % 254 + 1}"})
+
+    def test_export_returns_csv_with_header_and_rows(self):
+        self._ingest("page_view", "/csv-export-test")
+        time.sleep(2.3)  # let the server flush its event buffer to disk
+        r = httpx.get(f"{BASE}/api/export/{self._pid}.csv")
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("text/csv")
+        assert "attachment" in r.headers.get("content-disposition", "")
+        lines = [ln for ln in r.text.splitlines() if ln.strip()]
+        assert lines[0].startswith("event_id,project_id,session_id")
+        assert any("/csv-export-test" in ln for ln in lines[1:])
+
+    def test_export_event_name_filter(self):
+        self._ingest("click", "/filter-test")
+        time.sleep(2.3)
+        r = httpx.get(f"{BASE}/api/export/{self._pid}.csv", params={"event_name": "click"})
+        assert r.status_code == 200
+        body_rows = [ln for ln in r.text.splitlines()[1:] if ln.strip()]
+        # every data row must be a click event
+        assert all(",click," in ln or ln.split(",")[4] == "click" for ln in body_rows)
+
+    def test_export_unknown_project_is_header_only(self):
+        r = httpx.get(f"{BASE}/api/export/no-such-project-{uuid.uuid4().hex}.csv")
+        assert r.status_code == 200
+        lines = [ln for ln in r.text.splitlines() if ln.strip()]
+        assert len(lines) == 1  # header only, no data
+
+
+# ═══════════════════════════════════════════════════════════════
 # SECTION 5 — WebSocket real-time push
 # ═══════════════════════════════════════════════════════════════
 

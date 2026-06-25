@@ -38,10 +38,11 @@ per-event fees, and the whole stack runs from a single command.
 9. [HTTP API Reference](#9-http-api-reference)
 10. [Configuration](#10-configuration)
 11. [Security Model](#11-security-model)
-12. [Testing](#12-testing)
-13. [Deploying to Production](#13-deploying-to-production)
-14. [Troubleshooting](#14-troubleshooting)
-15. [Glossary](#15-glossary)
+12. [Exporting Data to CSV](#12-exporting-data-to-csv)
+13. [Testing](#13-testing)
+14. [Deploying to Production](#14-deploying-to-production)
+15. [Troubleshooting](#15-troubleshooting)
+16. [Glossary](#16-glossary)
 
 ---
 
@@ -264,6 +265,7 @@ colour, and **API key**.
 | `POST /api/projects` | admin* | Create a project `{ "name", "color" }` |
 | `GET  /api/projects/{id}` | admin* | Get one project (includes API key) |
 | `GET  /api/metrics/{id}` | public | Live + Spark metrics snapshot for a project |
+| `GET  /api/export/{id}.csv` | public | **Export all events for a project as CSV** (see [§12](#12-exporting-data-to-csv)) |
 | `WS   /ws/{project_id}` | public | Real-time metrics push (~1 Hz) |
 | `GET  /sdk/sasa.js` | public | Serve the SDK |
 | `GET  /dashboard`, `/demo` | public | Front-end pages |
@@ -328,12 +330,58 @@ Built-in protections:
 > `DEMO_API_KEY` (or remove the demo project), run behind a reverse proxy that
 > sets a correct `X-Forwarded-For`, and serve over HTTPS.
 
-A full write-up of the audit findings and fixes lives in the `testing/` folder
-(`SECURITY_AND_BUGS_AUDIT.md`).
+---
+
+## 12. Exporting Data to CSV
+
+Every project's raw event stream can be exported as a CSV file for offline
+analysis (pandas, Excel, BigQuery, a data warehouse, etc.).
+
+**From the dashboard:** select a project and click **⬇ Export CSV** in the top
+bar — the browser downloads `sasa_<project>_<timestamp>.csv`.
+
+**From the API / scripts:**
+
+```bash
+# All events for a project
+curl -OJ "http://localhost:8001/api/export/demo.csv"
+
+# Filter by event type and/or time range (Unix timestamps)
+curl -OJ "http://localhost:8001/api/export/demo.csv?event_name=purchase"
+curl -OJ "http://localhost:8001/api/export/demo.csv?since=1730000000&until=1730600000"
+```
+
+| Query param | Meaning |
+|---|---|
+| `event_name` | Only rows whose event type matches (e.g. `click`, `purchase`). |
+| `since` | Only events at/after this Unix timestamp. |
+| `until` | Only events at/before this Unix timestamp. |
+
+**CSV shape.** One row per event, with fixed columns:
+
+```
+event_id, project_id, session_id, user_id, event_name, path, url, title,
+referrer, screen_w, screen_h, user_agent, timestamp, ingested_at, properties
+```
+
+Any custom fields you sent via `SASA.track(name, {...})` are preserved as a JSON
+string in the trailing **`properties`** column, so the file stays a clean,
+fixed-width CSV. In pandas you can expand it with:
+
+```python
+import pandas as pd, json
+df = pd.read_csv("sasa_demo_1730000000.csv")
+props = pd.json_normalize(df["properties"].dropna().map(json.loads))
+df = df.join(props)
+```
+
+The response is **streamed**, so exporting large projects doesn't load the whole
+dataset into memory. Note that export reads from the on-disk event files, whose
+horizon is bounded by `EVENT_FILE_RETENTION_DAYS`.
 
 ---
 
-## 12. Testing
+## 13. Testing
 
 ```bash
 # Start the server first (tests run against a live instance on :8001)
@@ -344,14 +392,12 @@ pytest tests/test_suite.py tests/test_rate_limits.py -v
 ```
 
 The suite covers asset delivery, the project API, event ingestion, the metrics
-API, WebSocket streaming, SDK source invariants, concurrency, and rate limiting
-(**72 tests**). There is also an optional adversarial probe suite and a
-test-data generator under `testing/` for security regression checking and for
-populating the dashboard with realistic traffic.
+API, CSV export, WebSocket streaming, SDK source invariants, concurrency, and
+rate limiting (**76 tests**).
 
 ---
 
-## 13. Deploying to Production
+## 14. Deploying to Production
 
 1. **Environment:** set `ADMIN_SECRET`, a random `DEMO_API_KEY`, and
    `HOST=0.0.0.0` (inside a container).
@@ -367,7 +413,7 @@ populating the dashboard with realistic traffic.
 
 ---
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 | Symptom | Likely cause / fix |
 |---|---|
@@ -380,7 +426,7 @@ populating the dashboard with realistic traffic.
 
 ---
 
-## 15. Glossary
+## 16. Glossary
 
 | Term | Meaning |
 |---|---|

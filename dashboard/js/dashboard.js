@@ -260,6 +260,19 @@ function initCharts() {
   });
 }
 
+// ── CSV export ────────────────────────────────────────────────────────────────
+function exportCsv() {
+  if (!currentProject) { alert('Select a project first.'); return; }
+  // Trigger a file download from the streaming CSV endpoint.
+  const url = `/api/export/${encodeURIComponent(currentProject.id)}.csv`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 // ── install snippet modal ─────────────────────────────────────────────────────
 function openSnippet() {
   if (!currentProject) return;
