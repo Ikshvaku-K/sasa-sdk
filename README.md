@@ -396,3 +396,9 @@ populating the dashboard with realistic traffic.
 ---
 
 *Built with FastAPI, Apache Spark Structured Streaming, and Chart.js.*
+
+---
+
+<p align="center">
+  Built by <strong>Ikshvaku</strong> and <strong>Opus</strong>
+</p>
