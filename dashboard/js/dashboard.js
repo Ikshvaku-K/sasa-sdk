@@ -6,7 +6,7 @@ let ws = null;
 let charts = {};
 let feedRows = [];
 const MAX_FEED = 80;
-const COLORS = ['#4f8ef7','#34d399','#fbbf24','#f87171','#7c5cfc','#fb923c','#38bdf8','#a3e635'];
+const COLORS = ['#111111','#3a3a3a','#5c5c5c','#7a7a7a','#969696','#b0b0b0','#c8c8c8','#dcdcdc'];
 
 // ── boot ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -149,7 +149,7 @@ function renderTopClicks(clicks) {
 function renderVideoViewers(vpv) {
   const el = document.getElementById('video-viewers');
   const entries = Object.entries(vpv).sort((a,b) => b[1]-a[1]).slice(0,6);
-  if (!entries.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🎬</div><div class="empty-text">No video events yet</div></div>'; return; }
+  if (!entries.length) { el.innerHTML = '<div class="empty"><div class="empty-text">No video events yet</div></div>'; return; }
   const max = entries[0][1] || 1;
   el.innerHTML = entries.map(([vid, count], i) => `
     <div style="margin-bottom:10px">
@@ -227,15 +227,15 @@ function addFeedRow(etype, path, extra) {
 
 // ── charts init ───────────────────────────────────────────────────────────────
 function initCharts() {
-  const grid  = 'rgba(37,45,66,.9)';
-  const muted = '#6b7fa3';
+  const grid  = '#e2e2e2';
+  const muted = '#777777';
   const base  = { responsive:true, maintainAspectRatio:false, animation:{duration:250},
                    plugins:{legend:{display:false}} };
 
   charts.timeline = new Chart(document.getElementById('chart-timeline'), {
     type: 'line',
-    data: { labels:[], datasets:[{ data:[], borderColor:'#4f8ef7', backgroundColor:'rgba(79,142,247,.1)',
-      fill:true, tension:.4, pointRadius:0, borderWidth:2 }] },
+    data: { labels:[], datasets:[{ data:[], borderColor:'#111111', backgroundColor:'rgba(0,0,0,.06)',
+      fill:true, tension:0, pointRadius:0, borderWidth:1.5 }] },
     options: { ...base, scales: {
       x:{ticks:{color:muted,maxTicksLimit:6},grid:{color:grid}},
       y:{ticks:{color:muted},grid:{color:grid},beginAtZero:true} } },
@@ -297,7 +297,7 @@ function snippetHTML(p) {
   return `
   <div class="modal-head">
     <div class="modal-title">Install SASA on <span style="color:var(--accent)">${escHtml(p.name)}</span></div>
-    <button class="modal-close" onclick="closeModal()">✕</button>
+    <button class="modal-close" onclick="closeModal()">Close</button>
   </div>
   <div class="modal-body">
     <div class="install-step">
@@ -324,14 +324,14 @@ SASA.page('Checkout');</pre>
     <div class="install-step">
       <div class="install-step-title">Auto-tracked out of the box</div>
       <div class="tag-grid">
-        <span class="tag on">✓ Page views</span>
-        <span class="tag on">✓ Sessions</span>
-        <span class="tag on">✓ Scroll depth</span>
-        <span class="tag on">✓ Clicks</span>
-        <span class="tag on">✓ Video play/pause/seek</span>
-        <span class="tag on">✓ JS errors</span>
-        <span class="tag on">✓ SPA navigation</span>
-        <span class="tag on">✓ Page exit + time on page</span>
+        <span class="tag on">Page views</span>
+        <span class="tag on">Sessions</span>
+        <span class="tag on">Scroll depth</span>
+        <span class="tag on">Clicks</span>
+        <span class="tag on">Video play/pause/seek</span>
+        <span class="tag on">JS errors</span>
+        <span class="tag on">SPA navigation</span>
+        <span class="tag on">Page exit + time on page</span>
       </div>
     </div>
     <div class="install-step">
@@ -364,7 +364,7 @@ function newProjectHTML() {
   return `
   <div class="modal-head">
     <div class="modal-title">New Project</div>
-    <button class="modal-close" onclick="closeModal()">✕</button>
+    <button class="modal-close" onclick="closeModal()">Close</button>
   </div>
   <div class="modal-body">
     <div class="form-group">

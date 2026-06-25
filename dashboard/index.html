@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SASA — Analytics Dashboard</title>
-  <link rel="stylesheet" href="/dashboard/static/css/style.css">
+  <link rel="stylesheet" href="/dashboard/static/css/style.css?v=3">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -18,10 +18,10 @@
     </div>
 
     <div class="nav-section">Navigation</div>
-    <div class="nav-item active"><span class="nav-icon">📊</span> Dashboard</div>
-    <div class="nav-item" onclick="openSnippet()"><span class="nav-icon">⚡</span> Install SDK</div>
-    <div class="nav-item" onclick="window.open('/demo','_blank')"><span class="nav-icon">🎬</span> Demo Page</div>
-    <div class="nav-item" onclick="window.open('/docs','_blank')"><span class="nav-icon">📄</span> API Docs</div>
+    <div class="nav-item active">Dashboard</div>
+    <div class="nav-item" onclick="openSnippet()">Install SDK</div>
+    <div class="nav-item" onclick="window.open('/demo','_blank')">Demo Page</div>
+    <div class="nav-item" onclick="window.open('/docs','_blank')">API Docs</div>
 
     <div class="nav-section" style="margin-top:8px">Projects</div>
     <div class="project-list" id="project-list"></div>
@@ -37,8 +37,8 @@
     <div class="topbar">
       <div class="topbar-title" id="topbar-title">Select a project</div>
       <div class="live-pill"><div class="live-dot"></div>Live</div>
-      <button class="snippet-btn" onclick="exportCsv()">⬇ Export CSV</button>
-      <button class="snippet-btn" onclick="openSnippet()">⚡ Get Snippet</button>
+      <button class="snippet-btn" onclick="exportCsv()">Export CSV</button>
+      <button class="snippet-btn" onclick="openSnippet()">Get Snippet</button>
       <div class="conn-badge">
         <div class="conn-circle" id="conn-circle"></div>
         <span id="conn-text">Connecting…</span>
@@ -134,7 +134,7 @@
             <span class="panel-badge badge-live">live</span>
           </div>
           <div class="panel-body" id="video-viewers">
-            <div class="empty"><div class="empty-icon">🎬</div><div class="empty-text">No video events yet</div></div>
+            <div class="empty"><div class="empty-text">No video events yet</div></div>
           </div>
         </div>
       </div>
@@ -144,7 +144,7 @@
         <div class="panel">
           <div class="panel-head">
             <div class="panel-title">Event counts by window</div>
-            <span class="panel-badge badge-spark">⚡ Spark</span>
+            <span class="panel-badge badge-spark">Spark</span>
           </div>
           <div class="panel-body">
             <div class="chart-wrap" style="height:160px">
@@ -175,6 +175,6 @@
   <div class="modal" id="modal-snippet"></div>
 </div>
 
-<script src="/dashboard/static/js/dashboard.js?v=2"></script>
+<script src="/dashboard/static/js/dashboard.js?v=3"></script>
 </body>
 </html>
